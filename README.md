@@ -98,6 +98,13 @@ Feel free to check out the [issues page](#) to see if there is anything you can 
 
 ---
 
+## 🙏 Acknowledgments & Credits
+
+* **[Wallhaven.cc](https://wallhaven.cc)** - The absolute core of this project. A massive thank you to the Wallhaven team for maintaining the best wallpaper community on the internet and providing the free, public API that powers this downloader.
+* Built with the assistance of **Google Antigravity**.
+
+---
+
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
