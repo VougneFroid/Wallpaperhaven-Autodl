@@ -1,0 +1,22 @@
+# Environment Variables (DO NOT COMMIT!)
+.env
+
+# Application State & Data
+downloads/
+settings.json
+history.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
