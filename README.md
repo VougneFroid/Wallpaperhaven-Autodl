@@ -25,7 +25,7 @@
 * **Smart Search & Sort:** Query wallpapers by keyword and sort by Relevance, Latest, Top List, or Random. Infinite scrolling allows for seamless browsing.
 * **Multi-Select & Bulk Download:** Click to select multiple wallpapers, adding them to a floating download queue. Download them all locally with a single click.
 * **Visual Download History:** Never download the same wallpaper twice! Previously downloaded wallpapers prominently feature a sleek green `DOWNLOADED` badge while browsing.
-* **Native Folder Picker:** Set your custom download directory via the Settings tab. It uses your native Linux file explorer (`kdialog`) to let you visually select your preferred destination folder.
+* **Native Folder Picker:** Set your custom download directory via the Settings tab. It uses your native Linux file dialog (`kdialog` on KDE, `zenity` elsewhere) to let you visually select your preferred destination folder.
 * **Auto-Rate Limiting:** Wallhaven restricts users to 45 requests per minute. The backend automatically throttles your batch downloads in the background so you never get blocked.
 * **Zero Dependencies:** The backend runs entirely on Python's standard library. No `pip install`, `Node.js`, or complex setup required!
 
@@ -35,7 +35,7 @@
 
 ### Prerequisites
 - **Python 3.8+** installed on your system.
-- `kdialog` installed (standard on KDE Plasma) for the native folder picker feature to work.
+- `kdialog` (KDE) or `zenity` (GNOME/other) for the native folder picker. Every other feature works without it.
 
 ### Installation & Running
 

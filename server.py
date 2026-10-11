@@ -1,5 +1,4 @@
 import http.server
-import socketserver
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -62,24 +61,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def handle_search(self):
         query = urllib.parse.urlparse(self.path).query
-        
-        # Build Wallhaven API URL
+
+        # Build Wallhaven API URL, appending the API key if configured
         api_url = f"https://wallhaven.cc/api/v1/search?{query}"
-        
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'WallhavenAutoDL/1.0'})
-        
-        # Append API key if configured
         if API_KEY:
-            if "?" in api_url:
-                api_url += f"&apikey={API_KEY}"
-            else:
-                api_url += f"?apikey={API_KEY}"
-            req = urllib.request.Request(api_url, headers={'User-Agent': 'WallhavenAutoDL/1.0'})
-            
+            api_url += f"&apikey={API_KEY}"
+
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'WallhavenAutoDL/1.0'})
+
         try:
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 data = response.read()
-                
+
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -142,9 +135,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(history).encode())
 
     def handle_choose_folder(self):
+        # kdialog on KDE, zenity elsewhere
+        pickers = [
+            ["kdialog", "--getexistingdirectory", os.path.expanduser("~")],
+            ["zenity", "--file-selection", "--directory", "--filename", os.path.expanduser("~") + "/"],
+        ]
         try:
-            result = subprocess.run(["kdialog", "--getexistingdirectory", os.path.expanduser("~")], capture_output=True, text=True)
-            if result.returncode == 0 and result.stdout.strip():
+            result = None
+            for cmd in pickers:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    break
+                except FileNotFoundError:
+                    continue
+
+            if result and result.returncode == 0 and result.stdout.strip():
                 folder = result.stdout.strip()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -190,7 +195,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             time.sleep(1.5)
             
             req = urllib.request.Request(url, headers={'User-Agent': 'WallhavenAutoDL/1.0'})
-            with urllib.request.urlopen(req) as response, open(filepath, 'wb') as out_file:
+            with urllib.request.urlopen(req, timeout=60) as response, open(filepath, 'wb') as out_file:
                 out_file.write(response.read())
                 
             # Append to history
@@ -218,7 +223,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
 if __name__ == "__main__":
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    # Threaded so a slow download does not block searches and page loads
+    with http.server.ThreadingHTTPServer(("", PORT), Handler) as httpd:
         print(f"Serving at http://localhost:{PORT}")
         try:
             httpd.serve_forever()

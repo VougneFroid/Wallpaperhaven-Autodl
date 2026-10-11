@@ -8,6 +8,7 @@ const resultCount = document.getElementById('resultCount');
 const actionBar = document.getElementById('actionBar');
 const selectedCount = document.getElementById('selectedCount');
 const downloadBtn = document.getElementById('downloadBtn');
+const clearBtn = document.getElementById('clearBtn');
 const toast = document.getElementById('toast');
 
 const settingsBtn = document.getElementById('settingsBtn');
@@ -37,35 +38,41 @@ async function performSearch(isLoadMore = false) {
     if (!isLoadMore) {
         currentPage = 1;
         hasMore = true;
+        clearSelection();
         gallery.innerHTML = '';
+        gallery.style.height = '';
         resultCount.textContent = 'Searching...';
     }
-    
+
     isLoading = true;
     loader.style.display = 'block';
-    
+
     // Build query params
     const params = new URLSearchParams();
     if (query) params.append('q', query);
     params.append('sorting', sort);
     params.append('page', currentPage);
-    
+
     try {
         const response = await fetch(`/api/search?${params.toString()}`);
         const data = await response.json();
-        
+
         if (data.error) throw new Error(data.error);
-        
-        if (data.data.length === 0) {
-            hasMore = false;
-        } else {
-            renderGallery(data.data, isLoadMore);
-            if (!isLoadMore) {
-                resultCount.textContent = `Found ${data.meta.total} wallpapers`;
-            }
+
+        const wallpapers = data.data || [];
+        const meta = data.meta || {};
+
+        renderGallery(wallpapers, isLoadMore);
+        hasMore = wallpapers.length > 0 && (meta.current_page || 1) < (meta.last_page || 1);
+
+        if (!isLoadMore) {
+            resultCount.textContent = meta.total
+                ? `Found ${meta.total} wallpapers`
+                : 'No wallpapers found';
         }
     } catch (error) {
         console.error('Search error:', error);
+        hasMore = false;
         if (!isLoadMore) {
             resultCount.textContent = 'Error fetching wallpapers. Make sure API limit is not exceeded.';
         }
@@ -78,26 +85,40 @@ async function performSearch(isLoadMore = false) {
 
 // Render Gallery
 function renderGallery(wallpapers, isLoadMore) {
-    if (!isLoadMore && (!wallpapers || wallpapers.length === 0)) {
-        gallery.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem;">No wallpapers found. Try a different search.</p>';
+    if (!isLoadMore && wallpapers.length === 0) {
+        gallery.innerHTML = '<p class="empty-state">No wallpapers found. Try a different search.</p>';
+        gallery.style.height = '';
         return;
     }
-    
+
+    const fragment = document.createDocumentFragment();
+
     wallpapers.forEach(wp => {
         const card = document.createElement('div');
         card.className = 'wallpaper-card';
-        if (selectedWallpapers.has(wp.id)) {
-            card.classList.add('selected');
-        }
-        
-        let badgeHtml = '';
-        if (downloadHistory.has(wp.id)) {
-            badgeHtml = '<div class="downloaded-badge">DOWNLOADED</div>';
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+
+        const isSelected = selectedWallpapers.has(wp.id);
+        if (isSelected) card.classList.add('selected');
+        card.setAttribute('aria-pressed', String(isSelected));
+        card.setAttribute('aria-label', `Select ${wp.resolution} wallpaper`);
+
+        let orientation = 'Wallpaper';
+        if (wp.dimension_x && wp.dimension_y) {
+            orientation = wp.dimension_x > wp.dimension_y ? 'Landscape'
+                : wp.dimension_x < wp.dimension_y ? 'Portrait'
+                : 'Square';
         }
 
+        // Wallhaven's `large` thumb is a fixed 16:9 crop that distorts every
+        // portrait; `original` keeps the wallpaper's real shape
         card.innerHTML = `
-            <img src="${wp.thumbs.large}" alt="Wallpaper ${wp.id}" loading="lazy">
-            ${badgeHtml}
+            <img src="${wp.thumbs.original}" alt="" loading="lazy">
+            <div class="badges">
+                ${downloadHistory.has(wp.id) ? '<span class="badge badge-downloaded">Downloaded</span>' : ''}
+                <span class="badge badge-orientation">${orientation}</span>
+            </div>
             <div class="check-icon">
                 <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -108,24 +129,95 @@ function renderGallery(wallpapers, isLoadMore) {
                 <span class="purity">${wp.purity}</span>
             </div>
         `;
-        
+
+        // height per unit of width, for the masonry pass
+        card.dataset.ratio = (wp.dimension_x && wp.dimension_y)
+            ? wp.dimension_y / wp.dimension_x
+            : 9 / 16;
+
         card.addEventListener('click', () => toggleSelection(card, wp));
-        gallery.appendChild(card);
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSelection(card, wp);
+            }
+        });
+
+        fragment.appendChild(card);
     });
+
+    gallery.appendChild(fragment);
+    layoutGallery();
 }
+
+const GAP = 24;            // px between cards, horizontal and vertical
+const TARGET_WIDTH = 300;  // preferred card width; column count follows from it
+
+// Place every card in the shortest column. Cards are absolutely positioned from
+// the API's dimensions, so a new page only ever appends below what is already
+// on screen — nothing already visible shifts position.
+function layoutGallery() {
+    const cards = gallery.querySelectorAll('.wallpaper-card');
+    if (cards.length === 0) {
+        gallery.style.height = '';
+        return;
+    }
+
+    const width = gallery.clientWidth;
+    const columns = Math.max(1, Math.floor((width + GAP) / (TARGET_WIDTH + GAP)));
+    const cardWidth = (width - GAP * (columns - 1)) / columns;
+
+    const columnHeights = new Array(columns).fill(0);
+
+    cards.forEach(card => {
+        let shortest = 0;
+        for (let i = 1; i < columns; i++) {
+            if (columnHeights[i] < columnHeights[shortest]) shortest = i;
+        }
+
+        const cardHeight = cardWidth * parseFloat(card.dataset.ratio);
+
+        card.style.width = `${cardWidth}px`;
+        card.style.height = `${cardHeight}px`;
+        card.style.left = `${shortest * (cardWidth + GAP)}px`;
+        card.style.top = `${columnHeights[shortest]}px`;
+
+        columnHeights[shortest] += cardHeight + GAP;
+    });
+
+    gallery.style.height = `${Math.max(...columnHeights) - GAP}px`;
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(layoutGallery, 150);
+});
 
 // Toggle Selection
 function toggleSelection(card, wp) {
     if (isDownloading) return; // Prevent selection changes during download
-    
+
     if (selectedWallpapers.has(wp.id)) {
         selectedWallpapers.delete(wp.id);
         card.classList.remove('selected');
+        card.setAttribute('aria-pressed', 'false');
     } else {
         selectedWallpapers.set(wp.id, wp);
         card.classList.add('selected');
+        card.setAttribute('aria-pressed', 'true');
     }
-    
+
+    updateActionBar();
+}
+
+// Clear every selection, in state and in the DOM
+function clearSelection() {
+    selectedWallpapers.clear();
+    document.querySelectorAll('.wallpaper-card.selected').forEach(card => {
+        card.classList.remove('selected');
+        card.setAttribute('aria-pressed', 'false');
+    });
     updateActionBar();
 }
 
@@ -178,9 +270,7 @@ async function downloadSelected() {
     showToast(`Successfully downloaded ${successCount} wallpapers!`);
     
     // Reset state
-    selectedWallpapers.clear();
-    document.querySelectorAll('.wallpaper-card.selected').forEach(card => card.classList.remove('selected'));
-    updateActionBar();
+    clearSelection();
     isDownloading = false;
     downloadBtn.disabled = false;
     downloadBtn.innerHTML = `
@@ -212,6 +302,9 @@ searchInput.addEventListener('keypress', (e) => {
 });
 sortSelect.addEventListener('change', () => performSearch(false));
 downloadBtn.addEventListener('click', downloadSelected);
+clearBtn.addEventListener('click', () => {
+    if (!isDownloading) clearSelection();
+});
 
 // Setup Intersection Observer for infinite scroll
 const scrollSentinel = document.getElementById('scrollSentinel');

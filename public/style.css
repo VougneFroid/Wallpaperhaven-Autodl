@@ -15,6 +15,13 @@
     padding: 0;
 }
 
+/* Keep the content width identical whether or not a scrollbar is showing.
+   layoutGallery() measures that width, and a width that changes when the page
+   grows would re-position every card already on screen. */
+html {
+    scrollbar-gutter: stable;
+}
+
 body {
     font-family: 'Outfit', sans-serif;
     background-color: var(--bg-color);
@@ -117,20 +124,21 @@ main {
     font-size: 1.1rem;
 }
 
-/* Gallery Grid */
+/* Gallery — cards are positioned by layoutGallery() in app.js. Absolute
+   placement is what keeps already-visible cards from jumping when a new page
+   is appended, which a CSS columns/`masonry` layout cannot promise. */
 .gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
+    position: relative;
 }
 
 .wallpaper-card {
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     border-radius: 12px;
     overflow: hidden;
     cursor: pointer;
     background: #1e1e24;
-    aspect-ratio: 16/9;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
 }
@@ -141,9 +149,16 @@ main {
     z-index: 10;
 }
 
+.wallpaper-card:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 3px;
+}
+
 .wallpaper-card img {
     width: 100%;
     height: 100%;
+    /* cover, never fill: Wallhaven thumbnails are ratio-faithful but a hair off
+       the API's exact dimensions, and fill would stretch them */
     object-fit: cover;
     display: block;
     transition: opacity 0.3s ease;
@@ -201,13 +216,14 @@ main {
     opacity: 1;
 }
 
-.res {
+.res, .purity {
     font-weight: 600;
     font-size: 0.9rem;
     background: rgba(255,255,255,0.2);
     backdrop-filter: blur(4px);
     padding: 2px 8px;
     border-radius: 4px;
+    text-transform: capitalize;
 }
 
 /* Floating Action Bar */
@@ -243,6 +259,18 @@ main {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.clear-btn {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.7rem 1rem;
+    line-height: 0;
+}
+
+.clear-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    transform: none;
+    box-shadow: none;
 }
 
 /* Loader */
@@ -362,19 +390,44 @@ main {
     border-top: 1px solid var(--border-color);
 }
 
-/* Downloaded Badge */
-.downloaded-badge {
+/* Card Badges */
+.badges {
     position: absolute;
     top: 10px;
     left: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.badge-downloaded {
     background: rgba(39, 174, 96, 0.9);
     color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 4px 8px;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    z-index: 5;
+}
+
+.badge-orientation {
+    background: rgba(0, 0, 0, 0.55);
+    color: white;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
 }
 
